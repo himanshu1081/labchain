@@ -15,6 +15,8 @@ export const TOKEN_ADDRESS =
   "0xddB02b3CFea4032fF00A26e688A916C25257d97a";
 
 export const TOKEN_ABI = [
-  "function approve(address spender, uint256 amount) public returns (bool)"
+  "function approve(address spender, uint256 amount) public returns (bool)",
+  "function balanceOf(address account) view returns (uint256)",
+  "function allowance(address owner, address spender) view returns (uint256)"
 ];
 
