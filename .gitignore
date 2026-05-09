@@ -24,3 +24,10 @@ dist-ssr
 *.sw?
 
 .env
+
+# AI agent files
+CLAUDE.md
+AGENTS.md
+.agents/
+skills-lock.json
+convex/_generated/ai/
