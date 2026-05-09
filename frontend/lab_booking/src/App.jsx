@@ -1,5 +1,4 @@
-import { useState } from "react";
-import "./App.css";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { ethers } from "ethers";
 import { Link } from "react-router-dom";
 import { useMutation, useAction } from "convex/react";
@@ -11,17 +10,56 @@ import {
   TOKEN_ABI,
 } from "./constants";
 
+const EQUIPMENT = [
+  { id: "MIC-204", name: "Microscope", rate: 8, tier: "TIER-B", available: true, spec: "200x · Optical" },
+  { id: "OSC-102", name: "Oscilloscope", rate: 10, tier: "TIER-B", available: true, spec: "100MHz · 4-ch" },
+  { id: "CMP-301", name: "Computer System", rate: 5, tier: "TIER-C", available: true, spec: "i7 · 32GB" },
+  { id: "ROB-510", name: "Robotics Kit", rate: 15, tier: "TIER-A", available: true, spec: "6-DOF · Arm" },
+  { id: "PRN-110", name: "3D Printer", rate: 12, tier: "TIER-A", available: true, spec: "FDM · 0.1mm" },
+];
+
+function Marquee() {
+  const items = [
+    <span key="a"><i>◆</i> LAB / USD <em>$1.24</em> <i>+2.4%</i></span>,
+    <span key="b">BLOCK <em>#18,402,991</em></span>,
+    <span key="c"><i>◆</i> 142 LABS ONLINE</span>,
+    <span key="d">GAS <em>11 GWEI</em></span>,
+    <span key="e">DEPOSITS HELD <em>4,820 LAB</em></span>,
+    <span key="f"><i>◆</i> AVG BOOKING 6.3H</span>,
+    <span key="g">CONTRACT v2.1.0 <em>VERIFIED</em></span>,
+    <span key="h"><i>◆</i> ETH <em>$3,418</em></span>,
+  ];
+  return (
+    <div className="marquee">
+      <div className="marquee-track">{items}{items}</div>
+    </div>
+  );
+}
+
+function Toast({ kind, title, body }) {
+  return (
+    <div className="toast show">
+      <div className="x">{kind === "ok" ? "✓" : "!"}</div>
+      <div>
+        <div><b>{title}</b></div>
+        <div style={{ opacity: .85, fontSize: 12 }}>{body}</div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [wallet, setWallet] = useState("");
-  const [equipmentId, setEquipmentId] = useState("");
-  const [duration, setDuration] = useState("");
+  const [equipment, setEquipment] = useState(null);
+  const [duration, setDuration] = useState(4);
+  const [open, setOpen] = useState(false);
 
   const [txHash, setTxHash] = useState("");
-  const [bookingId, setBookingId] = useState("");
+  const [bookingId, setBookingId] = useState("—");
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
+  const [toast, setToast] = useState(null);
 
   const [email, setEmail] = useState("");
   const [emailSending, setEmailSending] = useState(false);
@@ -31,39 +69,42 @@ function App() {
   const [modalEquipmentId, setModalEquipmentId] = useState("");
   const [modalDuration, setModalDuration] = useState(0);
 
+  const dropdownRef = useRef(null);
+
   const saveBooking = useMutation(api.bookings.saveBooking);
   const sendEmail = useAction(api.email.sendBookingEmail);
 
-  async function connectWallet() {
-    if (!window.ethereum) {
-      setError("No wallet found");
-      return;
-    }
+  const deposit = useMemo(() => 50, []);
 
-    const accounts = await window.ethereum.request({
-      method: "eth_requestAccounts",
-    });
+  useEffect(() => {
+    const onDoc = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
 
-    setWallet(accounts[0]);
-  }
+  const showToast = (msg) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3200);
+  };
 
   function truncateAddress(addr) {
-    return addr.slice(0, 6) + "..." + addr.slice(-4);
+    return addr.slice(0, 6) + "…" + addr.slice(-4);
   }
 
-  async function copyTxHash() {
-    try {
-      await navigator.clipboard.writeText(txHash);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.log(err);
+  async function connectWallet() {
+    if (!window.ethereum) {
+      showToast({ kind: "warn", title: "No wallet found", body: "Install MetaMask to continue." });
+      return;
     }
+    const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+    setWallet(accounts[0]);
+    showToast({ kind: "ok", title: "Wallet connected", body: `${accounts[0].slice(0, 6)}…${accounts[0].slice(-4)}` });
   }
 
   async function handleSendEmail() {
     if (!email.trim()) return;
-
     try {
       setEmailSending(true);
       setEmailError("");
@@ -84,13 +125,12 @@ function App() {
   }
 
   async function handleBooking() {
-    if (!window.ethereum) {
-      setError("Wallet not connected");
+    if (!window.ethereum || !wallet) {
+      showToast({ kind: "warn", title: "Connect a wallet", body: "You need a connected wallet to sign." });
       return;
     }
-
-    if (!equipmentId || !duration) {
-      setError("Please fill in all fields");
+    if (!equipment) {
+      showToast({ kind: "warn", title: "Pick equipment", body: "Select something to book first." });
       return;
     }
 
@@ -105,7 +145,6 @@ function App() {
       const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
       const tokenContract = new ethers.Contract(TOKEN_ADDRESS, TOKEN_ABI, signer);
 
-      // Check token balance before proceeding
       const balance = await tokenContract.balanceOf(signerAddress);
       const depositAmount = ethers.parseUnits("50", 18);
 
@@ -115,31 +154,22 @@ function App() {
         return;
       }
 
-      // Get current booking count (this will be the new booking's ID)
       const currentCount = await contract.bookingCount();
       const newBookingId = currentCount.toString();
 
-      const approveTx = await tokenContract.approve(
-        CONTRACT_ADDRESS,
-        depositAmount
-      );
+      const approveTx = await tokenContract.approve(CONTRACT_ADDRESS, depositAmount);
       await approveTx.wait();
 
-      const tx = await contract.bookEquipment(
-        equipmentId,
-        duration,
-        depositAmount
-      );
+      const tx = await contract.bookEquipment(equipment.id, duration, depositAmount);
       await tx.wait();
 
       setTxHash(tx.hash);
       setBookingId(newBookingId);
 
-      // Save to Convex
       await saveBooking({
         bookingId: newBookingId,
         walletAddress: wallet,
-        equipmentId,
+        equipmentId: equipment.id,
         duration: Number(duration),
         depositAmount: "50",
         txHash: tx.hash,
@@ -148,11 +178,11 @@ function App() {
         bookedAt: Date.now(),
       });
 
-      setModalEquipmentId(equipmentId);
+      setModalEquipmentId(equipment.id);
       setModalDuration(Number(duration));
       setShowModal(true);
-      setEquipmentId("");
-      setDuration("");
+      setEquipment(null);
+      setDuration(4);
       setEmailSent(false);
       setEmail("");
       setEmailError("");
@@ -165,235 +195,283 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0b1120] text-white relative">
+    <div>
+      <Marquee />
 
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4">
+      {/* Nav */}
+      <nav className="nav">
+        <div className="brand">
+          <div className="brand-mark">L</div>
+          <div className="brand-name">Lab<em>Chain</em></div>
+        </div>
+        <div className="nav-links">
+          <a href="#equipment">Equipment</a>
+          <a href="#how">How it works</a>
+          <a href="#" className="live">Sepolia live</a>
+          <button className={"btn " + (wallet ? "primary" : "")} onClick={connectWallet}>
+            {wallet ? (
+              <>
+                <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 4, background: "#1A1814" }} />
+                {truncateAddress(wallet)}
+              </>
+            ) : "Connect Wallet"}
+          </button>
+        </div>
+      </nav>
 
-          <div className="w-full max-w-lg rounded-3xl border border-white/10 bg-[#111827] p-8 shadow-2xl flex flex-col items-center justify-center gap-4">
+      {/* Hero */}
+      <main>
+        <div className="hero">
+          {/* Left */}
+          <div>
+            <span className="eyebrow"><span className="dot" />Blockchain · Powered · Laboratory · Management</span>
 
-            <div className="flex justify-center mb-5">
-              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-500/20 text-green-400 text-3xl">
-                ✓
-              </div>
-            </div>
+            <h1 className="headline">
+              Book lab gear<br />
+              <em>without</em> the{" "}
+              <span className="pill">paperwork</span><br />
+              <span className="underline">smart contracts</span> handle the rest.
+            </h1>
 
-            <h2 className="text-3xl font-bold text-center">
-              Booking Successful
-            </h2>
-
-            <p className="text-slate-400 text-center mt-3">
-              Your transaction has been confirmed on blockchain.
+            <p className="lede">
+              LabChain runs on Ethereum. Reservations, <b>security deposits</b>, refunds, and overdue penalties all settle on-chain — transparently, automatically, without a lab manager's clipboard.
             </p>
 
-            <div className="w-full mt-4 rounded-2xl border border-white/10 bg-black/30 p-4">
-              <div className="flex flex-col items-center mb-4">
-                <p className="text-xs text-slate-400">Booking ID</p>
-                <p className="text-2xl font-bold text-blue-400">#{bookingId}</p>
-              </div>
+            <div className="chips">
+              <span className="chip green"><i />NON-CUSTODIAL ESCROW</span>
+              <span className="chip coral"><i />SUB-MINUTE SETTLEMENT</span>
+              <span className="chip"><i />ERC-20 TOKEN</span>
+              <span className="chip"><i />OPEN SOURCE</span>
+            </div>
 
-              <p className="text-xs text-slate-400 mb-2">Transaction Hash</p>
-              <div className="flex gap-3 items-start">
-                <p className="text-sm text-slate-200 break-all flex-1">
-                  {txHash}
-                </p>
-                <button
-                  onClick={copyTxHash}
-                  className="bg-blue-600 cursor-pointer hover:bg-blue-700 transition px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap"
-                >
-                  {copied ? "Copied" : "Copy"}
-                </button>
+            <div className="stats">
+              <div className="stat">
+                <div className="corner">01 / UPTIME</div>
+                <div className="num">24/7</div>
+                <div className="lbl">Automated · Smart Contract · Execution</div>
+              </div>
+              <div className="stat" style={{ transform: "rotate(-.6deg)" }}>
+                <div className="corner">02 / LEDGER</div>
+                <div className="num"><em>100%</em></div>
+                <div className="lbl">Transparent · Transactions · On-Chain</div>
+              </div>
+              <div className="stat">
+                <div className="corner">03 / FEES</div>
+                <div className="num">0<span style={{ fontStyle: "italic", color: "var(--coral)" }}>¢</span></div>
+                <div className="lbl">No middlemen · You pay gas only</div>
               </div>
             </div>
 
-            <div>
-              <a className="p-2 px-4 bg-blue-600 rounded-lg" target="_blank" href={`https://sepolia.etherscan.io/tx/${txHash}`}>
-                Show Transaction
+            <div className="scribble" style={{ marginTop: 28, transform: "rotate(-1deg)" }}>
+              <svg width="40" height="22" viewBox="0 0 40 22" fill="none">
+                <path d="M2 11 C 12 2, 28 20, 38 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                <path d="M32 6 L38 11 L32 16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+              </svg>
+              Pick a piece of equipment, set a duration, sign once.
+            </div>
+          </div>
+
+          {/* Right — Ticket */}
+          <div className="ticket-wrap">
+            <div className="ticket">
+              <div className="ticket-head">
+                <div className="dots">
+                  <span className="live" />
+                  <span />
+                  <span />
+                </div>
+                <div>BOOKING TICKET · #{bookingId}</div>
+                <div className="id">{wallet ? "WALLET·OK" : "AWAIT·SIG"}</div>
+              </div>
+              <div className="perf" />
+              <div className="ticket-body">
+                <div className="ticket-title">
+                  <h2>Book <em>Equipment</em></h2>
+                  <div className="stamp">
+                    <div className="stamp-inner">
+                      <b>EST.</b>
+                      26<br />CHAIN
+                    </div>
+                  </div>
+                </div>
+                <div className="ticket-sub">CREATE · NEW · LAB · EQUIPMENT · RESERVATION</div>
+
+                {/* Select Equipment */}
+                <div className="field" ref={dropdownRef} style={{ position: "relative" }}>
+                  <div className="field-label">
+                    <span>Select Equipment <span className="req">*</span></span>
+                    <span className="mono" style={{ fontSize: 10, color: "var(--muted)" }}>{equipment ? equipment.id : "—"}</span>
+                  </div>
+                  <div className="select-wrap" onClick={() => setOpen(o => !o)}>
+                    <div className="field-input" style={{ cursor: "pointer", color: equipment ? "var(--ink)" : "var(--muted)" }}>
+                      {equipment ? equipment.name : "Choose Equipment"}
+                    </div>
+                  </div>
+                  {open && (
+                    <div className="menu">
+                      {EQUIPMENT.map(eq => (
+                        <div
+                          key={eq.id}
+                          className={"opt " + (eq.available ? "" : "unavail")}
+                          onClick={() => { if (eq.available) { setEquipment(eq); setOpen(false); } }}
+                        >
+                          <div>
+                            <div style={{ fontWeight: 600 }}>{eq.name}</div>
+                            <div className="meta">{eq.id} · {eq.spec}</div>
+                          </div>
+                          <div className="meta" style={{ textAlign: "right" }}>
+                            <div>{eq.tier}</div>
+                            <div><b>{eq.available ? `${eq.rate} LAB/h` : "BOOKED"}</b></div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Duration */}
+                <div className="field">
+                  <div className="field-label">
+                    <span>Duration (in hours) <span className="req">*</span></span>
+                    <span className="mono" style={{ fontSize: 10, color: "var(--muted)" }}>MIN 1 · MAX 72</span>
+                  </div>
+                  <div className="input-suffix">
+                    <input
+                      type="number" min="1" max="72"
+                      value={duration}
+                      onChange={(e) => setDuration(Math.max(1, Math.min(72, Number(e.target.value) || 1)))}
+                    />
+                    <div className="suffix">HRS</div>
+                  </div>
+                </div>
+
+                {/* Security Deposit */}
+                <div className="field">
+                  <div className="field-label">
+                    <span>Security Deposit</span>
+                    <span className="mono" style={{ fontSize: 10, color: "var(--muted)" }}>FIXED</span>
+                  </div>
+                  <div className="input-suffix">
+                    <input value={`${deposit} LAB Tokens`} readOnly />
+                    <div className="suffix">
+                      <span className="coin">L</span>
+                      LAB
+                    </div>
+                  </div>
+                  <div className="mono" style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 6, letterSpacing: ".04em" }}>
+                    ↳ Refunded on-chain when equipment is returned in spec.
+                  </div>
+                </div>
+
+                <button className="confirm-btn" onClick={handleBooking} disabled={loading}>
+                  <span>{loading ? "Processing Transaction…" : "Confirm Booking"}</span>
+                  <span className="arrow">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                      <path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </span>
+                </button>
+
+                {error && <div className="error-text">{error}</div>}
+
+                <div className="or">or</div>
+
+                <Link to="/return" className="return-btn">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                    <path d="M12 7H2M6 3 2 7l4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  Return Equipment
+                </Link>
+
+                <div className="ticket-foot">
+                  <div>NO. #{bookingId} · GAS ≈ 11 GWEI</div>
+                  <div className="barcode">
+                    {[...Array(28)].map((_, i) => (
+                      <i key={i} style={{ height: `${8 + ((i * 37) % 14)}px`, width: i % 5 === 0 ? 3 : (i % 3 === 0 ? 1 : 2) }} />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      {/* Footer */}
+      <footer>
+        <div className="crumbs">
+          <span>© 2026 LabChain Labs</span>
+          <span>·</span>
+          <span>Contract: {CONTRACT_ADDRESS.slice(0, 6)}…{CONTRACT_ADDRESS.slice(-4)}</span>
+          <span>·</span>
+          <span>Sepolia Testnet</span>
+        </div>
+        <div>Built with smart contracts, not spreadsheets.</div>
+      </footer>
+
+      {/* Success Modal */}
+      {showModal && (
+        <div className="modal-overlay">
+          <div className="modal-card">
+            <div className="success-icon">✓</div>
+            <h2>Booking Confirmed</h2>
+            <p className="modal-sub">Your transaction has been confirmed on the blockchain.</p>
+
+            <div className="modal-detail">
+              <div className="detail-label">Booking ID</div>
+              <div className="detail-value big">#{bookingId}</div>
+            </div>
+
+            <div className="modal-detail">
+              <div className="detail-label">Transaction Hash</div>
+              <div className="detail-value" style={{ fontSize: 13 }}>{txHash}</div>
+            </div>
+
+            <div style={{ textAlign: "center", marginBottom: 16 }}>
+              <a
+                href={`https://sepolia.etherscan.io/tx/${txHash}`}
+                target="_blank"
+                className="btn primary"
+                style={{ textDecoration: "none" }}
+              >
+                View on Etherscan →
               </a>
             </div>
 
-            {/* Email Section */}
-            <div className="w-full mt-2 rounded-2xl border border-white/10 bg-black/30 p-4">
-              <p className="text-xs text-slate-400 mb-2">Send confirmation to email</p>
+            <div className="modal-detail">
+              <div className="detail-label">Send confirmation email</div>
               {emailSent ? (
-                <p className="text-green-400 text-sm font-medium">Email sent successfully!</p>
+                <div className="email-success">✓ Email sent successfully!</div>
               ) : (
                 <>
-                  <div className="flex gap-3">
+                  <div className="email-row">
                     <input
                       type="email"
                       placeholder="Enter your email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="flex-1 bg-[#0b1120] border border-white/10 rounded-xl px-4 py-2 outline-none focus:border-blue-500 transition text-sm"
                     />
-                    <button
-                      onClick={handleSendEmail}
-                      disabled={emailSending || !email.trim()}
-                      className="bg-blue-600 cursor-pointer hover:bg-blue-700 disabled:opacity-50 transition px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap"
-                    >
-                      {emailSending ? "Sending..." : "Send"}
+                    <button onClick={handleSendEmail} disabled={emailSending || !email.trim()}>
+                      {emailSending ? "Sending…" : "Send"}
                     </button>
                   </div>
-                  {emailError && (
-                    <p className="text-red-400 text-xs mt-2">{emailError}</p>
-                  )}
+                  {emailError && <div className="email-error">{emailError}</div>}
                 </>
               )}
             </div>
 
             <button
+              className="return-btn"
+              style={{ marginTop: 8 }}
               onClick={() => setShowModal(false)}
-              className="w-full mt-4 bg-white/10 cursor-pointer hover:bg-white/20 transition py-3 rounded-xl font-semibold"
             >
               Close
             </button>
-
           </div>
-
         </div>
       )}
 
-      <nav className="border-b border-white/10 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-6 py-5 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">
-              LabChain
-            </h1>
-            <p className="text-sm text-slate-400">
-              Smart Equipment Booking
-            </p>
-          </div>
-
-          <button
-            onClick={connectWallet}
-            className="bg-white text-black px-5 py-2 rounded-xl font-medium hover:opacity-90 transition"
-          >
-            {wallet ? truncateAddress(wallet) : "Connect Wallet"}
-          </button>
-        </div>
-      </nav>
-
-      <main className="max-w-7xl mx-auto px-6 py-16 grid lg:grid-cols-2 gap-12 items-center">
-
-        <div>
-          <p className="text-blue-400 font-medium mb-4">
-            Blockchain Powered Laboratory Management
-          </p>
-          <h2 className="text-5xl leading-tight font-bold mb-6">
-            Secure booking and automated deposit handling for lab equipment.
-          </h2>
-          <p className="text-slate-400 text-lg leading-relaxed max-w-xl">
-            LabChain uses Ethereum smart contracts to manage bookings,
-            security deposits, refunds, and penalties transparently without
-            relying on manual administration.
-          </p>
-          <div className="flex gap-4 mt-10">
-            <div className="bg-white/5 border border-white/10 px-6 py-5 rounded-2xl w-40">
-              <h3 className="text-3xl font-bold">24/7</h3>
-              <p className="text-slate-400 mt-1 text-sm">
-                Automated Smart Contract Execution
-              </p>
-            </div>
-            <div className="bg-white/5 border border-white/10 px-6 py-5 rounded-2xl w-40">
-              <h3 className="text-3xl font-bold">100%</h3>
-              <p className="text-slate-400 mt-1 text-sm">
-                Transparent Transactions
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white/5 border border-white/10 rounded-3xl p-8 shadow-2xl backdrop-blur-xl">
-          <div className="flex items-center justify-between mb-8">
-            <div>
-              <h3 className="text-2xl font-semibold">Book Equipment</h3>
-              <p className="text-slate-400 mt-1 text-sm">
-                Create a new lab equipment reservation
-              </p>
-            </div>
-            <div className="h-3 w-3 rounded-full bg-green-500"></div>
-          </div>
-
-          <div className="space-y-5">
-            <div>
-              <label className="text-sm text-slate-400 block mb-2">
-                Select Equipment
-              </label>
-              <select
-                value={equipmentId}
-                onChange={(e) => setEquipmentId(e.target.value)}
-                className="w-full bg-[#111827] border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-blue-500 transition"
-              >
-                <option value="">Choose Equipment</option>
-                <option value="MIC-204">Microscope - MIC-204</option>
-                <option value="OSC-102">Oscilloscope - OSC-102</option>
-                <option value="CMP-301">Computer System - CMP-301</option>
-                <option value="ROB-510">Robotics Kit - ROB-510</option>
-                <option value="PRN-110">3D Printer - PRN-110</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="text-sm text-slate-400 block mb-2">
-                Duration (in hours)
-              </label>
-              <input
-                type="number"
-                placeholder="4"
-                value={duration}
-                onChange={(e) => setDuration(e.target.value)}
-                className="w-full bg-[#111827] border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-blue-500 transition"
-              />
-            </div>
-
-            <div>
-              <label className="text-sm text-slate-400 block mb-2">
-                Security Deposit
-              </label>
-              <input
-                type="text"
-                value="50 LAB Tokens"
-                disabled
-                className="w-full bg-[#111827] border border-white/10 rounded-xl px-4 py-3 text-slate-400"
-              />
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <button
-                onClick={handleBooking}
-                disabled={loading}
-                className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 transition py-3 rounded-xl font-semibold mt-4 cursor-pointer"
-              >
-                {loading ? "Processing Transaction..." : "Confirm Booking"}
-              </button>
-              {error && (
-                <p className="text-red-400 text-sm mt-2">{error}</p>
-              )}
-              <div className="flex items-center gap-4 my-6">
-                <div className="flex-1 h-px bg-white/10"></div>
-                <p className="text-sm text-slate-400">or</p>
-                <div className="flex-1 h-px bg-white/10"></div>
-              </div>
-              <Link
-                to="/return"
-                className="border border-white/10 px-5 py-2 rounded-xl hover:bg-white/10 transition"
-              >
-                Return Equipment
-              </Link>
-            </div>
-          </div>
-
-          {wallet && (
-            <div className="mt-6 bg-black/20 border border-white/10 rounded-xl p-4">
-              <p className="text-xs text-slate-400 mb-1">Connected Wallet</p>
-              <p className="text-sm break-all">{wallet}</p>
-            </div>
-          )}
-        </div>
-
-      </main>
-
+      {toast && <Toast {...toast} />}
     </div>
   );
 }
