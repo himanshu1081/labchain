@@ -17,91 +17,185 @@ export const sendBookingEmail = action({
 
     const etherscanUrl = `https://sepolia.etherscan.io/tx/${args.txHash}`;
 
+    // Generate barcode bars as inline HTML
+    const bars = Array.from({ length: 32 }, (_, i) => {
+      const h = 10 + ((i * 37) % 14);
+      const w = i % 5 === 0 ? 3 : i % 3 === 0 ? 1 : 2;
+      return `<span style="display:inline-block;width:${w}px;height:${h}px;background:#1A1814;margin-right:2px;vertical-align:bottom;"></span>`;
+    }).join("");
+
     const html = `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
-<body style="margin: 0; padding: 0; background-color: #0b1120; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #0b1120; padding: 40px 20px;">
+<body style="margin:0;padding:0;background-color:#F2EDE0;background-image:radial-gradient(circle at 1px 1px,rgba(26,24,20,.08) 1px,transparent 0);background-size:22px 22px;font-family:'Space Grotesk',system-ui,sans-serif;color:#1A1814;">
+
+  <!-- Ticker Strip -->
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#1A1814;">
+    <tr>
+      <td style="padding:10px 24px;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.06em;color:#F2EDE0;text-align:center;">
+        <span style="color:#C8FF3D;">◆</span>&nbsp; LABCHAIN &nbsp;·&nbsp; BOOKING CONFIRMATION &nbsp;·&nbsp; ON-CHAIN &nbsp;·&nbsp; <span style="color:#FF7A59;">VERIFIED</span> &nbsp;·&nbsp; <span style="color:#C8FF3D;">◆</span>
+      </td>
+    </tr>
+  </table>
+
+  <table width="100%" cellpadding="0" cellspacing="0" style="padding:32px 20px 40px;">
     <tr>
       <td align="center">
-        <table width="600" cellpadding="0" cellspacing="0" style="max-width: 600px; width: 100%;">
+        <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
 
-          <!-- Header -->
+          <!-- Brand -->
           <tr>
-            <td style="text-align: center; padding-bottom: 30px;">
-              <h1 style="color: #ffffff; font-size: 28px; margin: 0; letter-spacing: -0.5px;">LabChain</h1>
-              <p style="color: #94a3b8; font-size: 13px; margin: 4px 0 0;">Smart Equipment Booking</p>
+            <td style="padding-bottom:24px;">
+              <table cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="width:34px;height:34px;border-radius:10px;background:#1A1814;color:#C8FF3D;text-align:center;font-family:'Instrument Serif',serif;font-style:italic;font-size:22px;line-height:34px;box-shadow:3px 3px 0 #C8FF3D;transform:rotate(-4deg);">L</td>
+                  <td style="padding-left:12px;font-family:'Instrument Serif',serif;font-size:24px;line-height:1;">Lab<span style="font-style:italic;color:#FF7A59;">Chain</span></td>
+                </tr>
+              </table>
             </td>
           </tr>
 
-          <!-- Main Card -->
+          <!-- Ticket Card -->
           <tr>
-            <td style="background-color: #111827; border: 1px solid rgba(255,255,255,0.1); border-radius: 24px; padding: 40px;">
+            <td>
+              <table width="100%" cellpadding="0" cellspacing="0" style="background:#FBF7EC;border:2px solid #1A1814;border-radius:16px;box-shadow:6px 6px 0 #1A1814;overflow:hidden;">
 
-              <!-- Success Icon -->
-              <div style="text-align: center; margin-bottom: 24px;">
-                <div style="display: inline-block; width: 64px; height: 64px; line-height: 64px; border-radius: 50%; background-color: rgba(34,197,94,0.15); color: #4ade80; font-size: 28px;">✓</div>
-              </div>
-
-              <h2 style="color: #ffffff; text-align: center; font-size: 24px; margin: 0 0 8px;">Booking Confirmed</h2>
-              <p style="color: #94a3b8; text-align: center; font-size: 14px; margin: 0 0 32px;">Your lab equipment has been successfully booked on the blockchain.</p>
-
-              <!-- Booking ID Badge -->
-              <div style="text-align: center; margin-bottom: 28px;">
-                <div style="display: inline-block; background: linear-gradient(135deg, #1e40af, #3b82f6); padding: 12px 32px; border-radius: 16px;">
-                  <p style="color: #93c5fd; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 4px;">Booking ID</p>
-                  <p style="color: #ffffff; font-size: 28px; font-weight: bold; margin: 0;">#${args.bookingId}</p>
-                </div>
-              </div>
-
-              <!-- Details Table -->
-              <table width="100%" cellpadding="0" cellspacing="0" style="background-color: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; overflow: hidden;">
+                <!-- Ticket Header -->
                 <tr>
-                  <td style="padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.06);">
-                    <p style="color: #64748b; font-size: 12px; margin: 0 0 4px;">Equipment</p>
-                    <p style="color: #e2e8f0; font-size: 15px; font-weight: 600; margin: 0;">${args.equipmentId}</p>
+                  <td style="background:#1A1814;color:#F2EDE0;padding:14px 22px;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;">
+                    <table width="100%" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td>
+                          <span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#C8FF3D;margin-right:4px;vertical-align:middle;"></span>
+                          <span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#46423b;margin-right:4px;vertical-align:middle;"></span>
+                          <span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#46423b;vertical-align:middle;"></span>
+                        </td>
+                        <td style="text-align:center;">BOOKING TICKET</td>
+                        <td style="text-align:right;color:#C8FF3D;">CONFIRMED</td>
+                      </tr>
+                    </table>
                   </td>
                 </tr>
+
+                <!-- Perforation -->
                 <tr>
-                  <td style="padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.06);">
-                    <p style="color: #64748b; font-size: 12px; margin: 0 0 4px;">Duration</p>
-                    <p style="color: #e2e8f0; font-size: 15px; font-weight: 600; margin: 0;">${args.duration} hour${args.duration !== 1 ? "s" : ""}</p>
+                  <td style="height:16px;border-bottom:2px dashed rgba(26,24,20,.3);position:relative;"></td>
+                </tr>
+
+                <!-- Ticket Body -->
+                <tr>
+                  <td style="padding:28px 28px 24px;">
+
+                    <!-- Success + Title -->
+                    <table width="100%" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td>
+                          <div style="font-family:'Instrument Serif',serif;font-size:32px;line-height:1;margin:0 0 4px;">Booking <span style="font-style:italic;color:#FF7A59;">Confirmed</span></div>
+                          <div style="font-family:'JetBrains Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:#7A736A;margin-bottom:20px;">YOUR · RESERVATION · IS · ON-CHAIN</div>
+                        </td>
+                        <td style="text-align:right;vertical-align:top;">
+                          <div style="width:72px;height:72px;border-radius:50%;border:2px dashed #1A1814;display:inline-block;text-align:center;line-height:1;">
+                            <div style="width:54px;height:54px;border-radius:50%;border:2px solid #1A1814;background:#C8FF3D;display:inline-block;margin-top:7px;text-align:center;">
+                              <div style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;padding-top:12px;line-height:1;">✓</div>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <!-- Booking ID Badge -->
+                    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;">
+                      <tr>
+                        <td align="center">
+                          <div style="display:inline-block;background:#C8FF3D;border:2px solid #1A1814;border-radius:12px;padding:14px 36px;box-shadow:4px 4px 0 #1A1814;text-align:center;">
+                            <div style="font-family:'JetBrains Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:#3A3630;margin-bottom:4px;">Booking ID</div>
+                            <div style="font-family:'Instrument Serif',serif;font-size:36px;line-height:1;color:#1A1814;font-weight:400;">#${args.bookingId}</div>
+                          </div>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <!-- Details -->
+                    <table width="100%" cellpadding="0" cellspacing="0" style="border:2px solid #1A1814;border-radius:12px;overflow:hidden;background:#F2EDE0;margin-bottom:20px;">
+                      <tr>
+                        <td style="padding:14px 18px;border-bottom:1px solid rgba(26,24,20,.15);">
+                          <div style="font-family:'JetBrains Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:#7A736A;margin-bottom:3px;">Equipment</div>
+                          <div style="font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:600;color:#1A1814;">${args.equipmentId}</div>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding:14px 18px;border-bottom:1px solid rgba(26,24,20,.15);">
+                          <div style="font-family:'JetBrains Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:#7A736A;margin-bottom:3px;">Duration</div>
+                          <div style="font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:600;color:#1A1814;">${args.duration} hour${args.duration !== 1 ? "s" : ""}</div>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding:14px 18px;border-bottom:1px solid rgba(26,24,20,.15);">
+                          <div style="font-family:'JetBrains Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:#7A736A;margin-bottom:3px;">Security Deposit</div>
+                          <div style="font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:600;color:#1A1814;">50 LAB Tokens</div>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding:14px 18px;">
+                          <div style="font-family:'JetBrains Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:#7A736A;margin-bottom:3px;">Transaction Hash</div>
+                          <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#FF7A59;word-break:break-all;">${args.txHash}</div>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <!-- CTA Button -->
+                    <table width="100%" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td align="center">
+                          <a href="${etherscanUrl}" target="_blank"
+                             style="display:inline-block;background:#C8FF3D;color:#1A1814;text-decoration:none;padding:16px 32px;border:2px solid #1A1814;border-radius:12px;font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:700;box-shadow:4px 4px 0 #1A1814;">
+                            View on Etherscan →
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <!-- Deposit note -->
+                    <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#7A736A;letter-spacing:.04em;margin-top:18px;text-align:center;">
+                      ↳ Deposit refunded on-chain when equipment is returned in spec.
+                    </div>
+
                   </td>
                 </tr>
+
+                <!-- Ticket Footer with barcode -->
                 <tr>
-                  <td style="padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.06);">
-                    <p style="color: #64748b; font-size: 12px; margin: 0 0 4px;">Security Deposit</p>
-                    <p style="color: #e2e8f0; font-size: 15px; font-weight: 600; margin: 0;">50 LAB Tokens</p>
+                  <td style="padding:0 28px 20px;">
+                    <div style="border-top:2px dashed rgba(26,24,20,.3);padding-top:14px;">
+                      <table width="100%" cellpadding="0" cellspacing="0">
+                        <tr>
+                          <td style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#7A736A;letter-spacing:.04em;">
+                            NO. #${args.bookingId} · SEPOLIA
+                          </td>
+                          <td style="text-align:right;line-height:0;">
+                            ${bars}
+                          </td>
+                        </tr>
+                      </table>
+                    </div>
                   </td>
                 </tr>
-                <tr>
-                  <td style="padding: 16px 20px;">
-                    <p style="color: #64748b; font-size: 12px; margin: 0 0 4px;">Transaction Hash</p>
-                    <p style="color: #93c5fd; font-size: 13px; word-break: break-all; margin: 0;">${args.txHash}</p>
-                  </td>
-                </tr>
+
               </table>
-
-              <!-- CTA Button -->
-              <div style="text-align: center; margin-top: 28px;">
-                <a href="${etherscanUrl}" target="_blank"
-                   style="display: inline-block; background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 12px; font-size: 14px; font-weight: 600;">
-                  View on Etherscan →
-                </a>
-              </div>
-
             </td>
           </tr>
 
           <!-- Footer -->
           <tr>
-            <td style="text-align: center; padding-top: 24px;">
-              <p style="color: #475569; font-size: 12px; margin: 0;">This is an automated confirmation from LabChain.</p>
-              <p style="color: #334155; font-size: 11px; margin: 8px 0 0;">Powered by Ethereum Smart Contracts</p>
+            <td style="padding-top:24px;text-align:center;">
+              <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#7A736A;letter-spacing:.04em;">
+                © 2026 LabChain Labs · Built with smart contracts, not spreadsheets.
+              </div>
             </td>
           </tr>
 
@@ -109,6 +203,7 @@ export const sendBookingEmail = action({
       </td>
     </tr>
   </table>
+
 </body>
 </html>`;
 
