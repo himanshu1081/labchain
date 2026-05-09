@@ -205,8 +205,6 @@ function App() {
           <div className="brand-name">Lab<em>Chain</em></div>
         </div>
         <div className="nav-links">
-          <a href="#equipment">Equipment</a>
-          <a href="#how">How it works</a>
           <a href="#" className="live">Sepolia live</a>
           <button className={"btn " + (wallet ? "primary" : "")} onClick={connectWallet}>
             {wallet ? (
